@@ -2,10 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Nakukryskin\OrchidRepeaterField;
+namespace Nakukryskin\OrchidRepeaterField\Providers;
 
-use Orchid\Platform\Dashboard;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
+use Orchid\Platform\Dashboard;
+use View;
 
 /**
  * Class ServiceProvider.
@@ -15,7 +16,7 @@ class ServiceProvider extends BaseServiceProvider
     /**
      * Required version of orchid/platform package.
      */
-    const REQUIRED_ORCHID_PLATFORM_VERSION = '3.8.1';
+    const REQUIRED_ORCHID_PLATFORM_VERSION = '6.1.0';
 
     /**
      * @var Dashboard
@@ -25,7 +26,7 @@ class ServiceProvider extends BaseServiceProvider
     /**
      * Perform post-registration booting of services.
      *
-     * @param Dashboard $dashboard
+     * @param  Dashboard  $dashboard
      * @return void
      * @throws \Exception
      */
@@ -33,10 +34,11 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->dashboard = $dashboard;
 
-        $this->loadViewsFrom(__DIR__.'/../resources/views', 'platform');
+        $this->loadViewsFrom(ORCHID_REPEATER_FIELD_PACKAGE_PATH.'/resources/views', 'platform');
 
         $this->versionCompare()
             ->registerResources()
+            ->registerProviders()
             ->registerTranslations();
 
         // Publishing is only necessary when using the CLI.
@@ -54,13 +56,20 @@ class ServiceProvider extends BaseServiceProvider
     public function register()
     {
         if (! defined('ORCHID_REPEATER_FIELD_PACKAGE_PATH')) {
-            define('ORCHID_REPEATER_FIELD_PACKAGE_PATH', realpath(__DIR__.'/../'));
+            define('ORCHID_REPEATER_FIELD_PACKAGE_PATH', realpath(__DIR__.'/../../'));
+        }
+    }
+
+    /**
+     * Register provider.
+     */
+    public function registerProviders(): self
+    {
+        foreach ($this->provides() as $provide) {
+            $this->app->register($provide);
         }
 
-        // Register the service the package provides.
-        $this->app->singleton('repeater-field', function ($app) {
-            return new RepeaterField;
-        });
+        return $this;
     }
 
     /**
@@ -68,9 +77,11 @@ class ServiceProvider extends BaseServiceProvider
      *
      * @return array
      */
-    public function provides()
+    public function provides(): array
     {
-        return ['repeater-field'];
+        return [
+            RouteServiceProvider::class,
+        ];
     }
 
     /**
@@ -82,7 +93,7 @@ class ServiceProvider extends BaseServiceProvider
     {
         // Publishing the views.
         $this->publishes([
-            ORCHID_REPEATER_FIELD_PACKAGE_PATH.'/resources/views' => base_path('resources/views/vendor/platform/fields'),
+            ORCHID_REPEATER_FIELD_PACKAGE_PATH.'/resources/views' => base_path('resources/views/vendor/platform'),
         ], 'repeater-field.views');
     }
 
@@ -95,8 +106,9 @@ class ServiceProvider extends BaseServiceProvider
     {
         $this->dashboard->addPublicDirectory('repeater', ORCHID_REPEATER_FIELD_PACKAGE_PATH.'/public/');
 
-        \View::composer('platform::layouts.app', function () {
-            \Dashboard::registerResource('scripts', orchid_mix('/js/repeater.js', 'repeater'))
+        View::composer('platform::app', function () {
+            $this->dashboard
+                ->registerResource('scripts', orchid_mix('/js/repeater.js', 'repeater'))
                 ->registerResource('stylesheets', orchid_mix('/css/repeater.css', 'repeater'));
         });
 
